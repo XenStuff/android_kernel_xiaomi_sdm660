@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 echo "Cloning dependencies"
-git clone --depth=1 https://github.com/sohamxda7/llvm-stable  clang
+git clone --depth=1 https://gitlab.com/Project-Nexus/nexus-clang.git -b nexus-15 clang  clang
 git clone https://github.com/sohamxda7/llvm-stable -b gcc64 --depth=1 gcc
 git clone https://github.com/sohamxda7/llvm-stable -b gcc32  --depth=1 gcc32
 git clone --depth=1 https://github.com/XenStuff/AnyKernel3 AnyKernel
@@ -12,12 +12,18 @@ KERNEL_DIR=$(pwd)
 PATH="${KERNEL_DIR}/clang/bin:${KERNEL_DIR}/gcc/bin:${KERNEL_DIR}/gcc32/bin:${PATH}"
 export KBUILD_COMPILER_STRING="$(${KERNEL_DIR}/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g')"
 export ARCH=arm64
-export KBUILD_BUILD_HOST=xenxynon
-export KBUILD_BUILD_USER="sohamsen"
+export KBUILD_BUILD_HOST=circleci
+export KBUILD_BUILD_USER="xenynon"
+
+ZIP=NekoKernel-Lite-lavender
+
+# Linker
+LINKER=ld.lld
+
 # sticker plox
 function sticker() {
     curl -s -X POST "https://api.telegram.org/bot$token/sendSticker" \
-        -d sticker="CAACAgIAAxkBAAEEdupiV8efWcC6Z2hWRrFl2B0lGcKb-AACrw4AArUbAAFIIy2Bm1o-Kw8jBA" \
+        -d sticker="CAACAgUAAxkBAAEFnd9jAAGEsQbKs4Alsvd3Jb20q1msBqQAAigDAAK49KhUEBMy-knYLWspBA" \
         -d chat_id=$chat_id
 }
 # Send info plox channel
@@ -49,13 +55,21 @@ function finerr() {
 }
 # Compile plox
 function compile() {
-    make O=out ARCH=arm64 lavender_defconfig
-    make -j$(nproc --all) O=out \
-                    ARCH=arm64 \
-                    CC=clang \
-                    CLANG_TRIPLE=aarch64-linux-gnu- \
-                    CROSS_COMPILE=aarch64-linux-android- \
-                    CROSS_COMPILE_ARM32=arm-linux-androideabi-
+       make O=out ARCH=arm64 lavender_defconfig
+       make -kj$(nproc --all) O=out \
+       ARCH=arm64 \
+       CC=clang \
+       CROSS_COMPILE=aarch64-linux-gnu- \
+       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+				LD=${LINKER} \
+				AR=llvm-ar \
+				NM=llvm-nm \
+				OBJCOPY=llvm-objcopy \
+				OBJDUMP=llvm-objdump \
+				STRIP=llvm-strip \
+				READELF=llvm-readelf \
+				OBJSIZE=llvm-size \
+				V=$VERBOSE 2>&1 | tee error.log
 
     if ! [ -a "$IMAGE" ]; then
         push "error.log" "Build Throws Errors"
@@ -67,7 +81,7 @@ function compile() {
 # Zipping
 function zipping() {
     cd AnyKernel || exit 1
-    zip -r9 NekoKernel-Lite-lavender-${TANGGAL}.zip *
+    zip -r9 ${ZIP}-${TANGGAL}.zip *
     cd ..
 }
 sticker
